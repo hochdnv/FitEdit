@@ -231,11 +231,13 @@ class GarminSession:
         raise GarminError("sign-in timed out")
 
     # -- data ----------------------------------------------------------
-    def activities(self, days: int = 7, start: str = "", end: str = "") -> list[dict]:
+    def activities(self, days: int | str = 7, start: str = "", end: str = "") -> list[dict]:
         client = self._require()
         end_date = date.fromisoformat(end) if end else date.today()
         if start:
             start_date = date.fromisoformat(start)
+        elif str(days).lower() == "all":
+            start_date = date(1970, 1, 1)
         else:
             span = max(1, min(int(days or 7), 3650))
             start_date = end_date - timedelta(days=span - 1)

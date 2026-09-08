@@ -59,6 +59,7 @@ export function initGarmin({ api, toast, esc, formatDistance, formatDuration, on
     show('garminLogin', usable && !status.loggedIn && !status.mfaPending);
     show('garminMfa', usable && status.mfaPending);
     show('garminBrowse', usable && status.loggedIn);
+    show('gcDownload', usable && status.loggedIn);
 
     if (!usable) {
       return setStatus(`${esc(status.hint || 'Garmin Connect is not available.')}`

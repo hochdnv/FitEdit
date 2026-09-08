@@ -159,7 +159,7 @@ class Handler(BaseHTTPRequestHandler):
             if route == "/api/garmin/activities":
                 self._require_garmin()
                 return self._json({"activities": _GARMIN.activities(
-                    days=int(query.get("days", ["7"])[0] or 7),
+                    days=query.get("days", ["7"])[0] or 7,
                     start=query.get("start", [""])[0],
                     end=query.get("end", [""])[0],
                 ), "existing": [f["name"] for f in self._list_files()]})

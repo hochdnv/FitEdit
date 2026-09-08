@@ -46,6 +46,8 @@ const BASEMAPS = {
 const el = (id) => document.getElementById(id);
 const state = {
   data: null,
+  originalData: null,
+  cropSource: null,
   path: null,
   series: [],
   markers: [],
@@ -76,6 +78,29 @@ function unitLabel(kind, fallback = '') {
   return u ? u[1] : fallback;
 }
 
+function cloneData(data) {
+  return JSON.parse(JSON.stringify(data));
+}
+
+function rangeData(data, start, end) {
+  if (!data || !Array.isArray(data.times) || !data.times.length) return data;
+  const lo = Math.max(0, Math.min(start, data.times.length - 1));
+  const hi = Math.max(lo, Math.min(end, data.times.length - 1));
+  const times = data.times.slice(lo, hi + 1);
+  const track = (data.track || []).filter((p) => p.i >= lo && p.i <= hi).map((p) => ({ ...p, i: p.i - lo }));
+  const series = (data.series || []).map((s) => ({
+    ...s,
+    values: (s.values || []).slice(lo, hi + 1),
+  }));
+  return {
+    ...data,
+    times,
+    series,
+    track,
+    recordCount: times.length,
+  };
+}
+
 function buildSeries() {
   state.series = state.data.series.map((s, i) => {
     const u = unit(s.kind);
@@ -87,6 +112,50 @@ function buildSeries() {
     };
   });
   return state.series;
+}
+
+function restoreOriginalData() {
+  if (!state.originalData) return;
+  state.data = cloneData(state.originalData);
+  state.cropSource = null;
+  state.lat = new Array(state.data.times.length);
+  state.lon = new Array(state.data.times.length);
+  state.data.track.forEach((p) => { state.lat[p.i] = p.lat; state.lon[p.i] = p.lon; });
+  stack.setData(state.data.times, buildSeries());
+  el('cursor').max = state.data.times.length - 1;
+  el('cursor').value = 0;
+  buildSeriesList();
+  renderSummary();
+  drawTrack();
+  renderCrop();
+  showHover(0, null);
+}
+
+function applyCropToCurrentView() {
+  if (!state.data || !state.data.times.length) return;
+  const [c0, c1] = stack.crop;
+  if (c0 === 0 && c1 >= state.data.times.length - 1) {
+    toast('The current selection already covers the whole visible track.');
+    return;
+  }
+  if (!state.originalData) state.originalData = cloneData(state.data);
+  state.cropSource = [c0, c1];
+  const source = state.originalData;
+  const start = Math.min(c0, source.times.length - 1);
+  const end = Math.min(c1, source.times.length - 1);
+  state.data = rangeData(source, start, end);
+  state.lat = new Array(state.data.times.length);
+  state.lon = new Array(state.data.times.length);
+  state.data.track.forEach((p) => { state.lat[p.i] = p.lat; state.lon[p.i] = p.lon; });
+  stack.setData(state.data.times, buildSeries());
+  el('cursor').max = state.data.times.length - 1;
+  el('cursor').value = 0;
+  buildSeriesList();
+  renderSummary();
+  drawTrack();
+  renderCrop();
+  showHover(0, null);
+  toast('Working data cropped in memory. Use “Restore” to recover the original.');
 }
 
 /* ---------------- map ---------------- */
@@ -711,6 +780,8 @@ async function loadFile(name) {
   const data = await api(`/api/load?path=${encodeURIComponent(name)}`);
   if (!data.times.length) throw new Error('no record messages with timestamps');
   state.data = data;
+  state.originalData = cloneData(data);
+  state.cropSource = null;
   state.path = data.path;
   state.lat = new Array(data.times.length);
   state.lon = new Array(data.times.length);
@@ -729,8 +800,10 @@ async function loadFile(name) {
 }
 
 async function saveCropped() {
-  const [c0, c1] = stack.crop;
-  const times = state.data.times;
+  const source = state.originalData || state.data;
+  const cropRange = state.cropSource || [0, source.times.length - 1];
+  const [c0, c1] = cropRange;
+  const times = source.times;
   const suggestion = state.path.replace(/\.fit$/i, '') + '_cropped.fit';
   const name = prompt('Save cropped activity as:', suggestion);
   if (!name) return;
@@ -752,6 +825,59 @@ async function saveCropped() {
   } finally {
     el('save').disabled = false;
   }
+}
+
+function exportGpx() {
+  if (!state.data || !state.data.track || !state.data.track.length) {
+    toast('No track points are available for export.', true);
+    return;
+  }
+
+  const track = state.data.track;
+  const series = Object.fromEntries((state.data.series || []).map((s) => [s.name, s.values]));
+  const escapeXml = (value) => String(value).replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;'
+  }[char]));
+
+  const points = track.map((point) => {
+    const idx = Number(point.i) || 0;
+    const time = state.data.times[idx];
+    const lat = Number(point.lat);
+    const lon = Number(point.lon);
+    const altitudeValue = Number(series.altitude?.[idx] ?? NaN);
+    const enhancedAltitude = Number(series.enhanced_altitude?.[idx] ?? NaN);
+    const ele = Number.isFinite(altitudeValue) ? altitudeValue : enhancedAltitude;
+    const speedValue = Number(series.speed?.[idx] ?? NaN);
+    const enhancedSpeed = Number(series.enhanced_speed?.[idx] ?? NaN);
+    const speed = Number.isFinite(speedValue) ? speedValue : enhancedSpeed;
+    const heartRate = Number(series.heart_rate?.[idx] ?? NaN);
+    const power = Number(series.power?.[idx] ?? NaN);
+    const timestamp = Number.isFinite(time) ? new Date(time * 1000).toISOString() : null;
+    const eleXml = Number.isFinite(ele) ? `<ele>${ele.toFixed(3)}</ele>` : '';
+    const timeXml = timestamp ? `<time>${timestamp}</time>` : '';
+    const speedXml = Number.isFinite(speed) ? `<speed>${speed.toFixed(6)}</speed>` : '';
+    const ext = [
+      Number.isFinite(heartRate) ? `<gpxtpx:hr>${Math.round(heartRate)}</gpxtpx:hr>` : '',
+      Number.isFinite(power) ? `<gpxtpx:power>${Math.round(power)}</gpxtpx:power>` : '',
+    ].filter(Boolean).join('');
+    return `<trkpt lat="${lat.toFixed(6)}" lon="${lon.toFixed(6)}">${eleXml}${timeXml}${speedXml}${ext ? `<extensions><gpxtpx:TrackPointExtension>${ext}</gpxtpx:TrackPointExtension></extensions>` : ''}</trkpt>`;
+  }).join('\n');
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n`
+    + `<gpx version="1.1" creator="FIT Editor" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">\n`
+    + `  <metadata><name>${escapeXml(state.path || 'FIT track')}</name></metadata>\n`
+    + `  <trk><name>${escapeXml(state.path || 'FIT track')}</name><trkseg>\n${points}\n  </trkseg></trk>\n`
+    + `</gpx>\n`;
+  const blob = new Blob([xml], { type: 'application/gpx+xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (state.path || 'track').replace(/\.fit$/i, '') + '.gpx';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  toast(`Exported GPX for ${state.path || 'current track'}.`);
 }
 
 /* ---------------- wiring ---------------- */
@@ -810,10 +936,13 @@ document.addEventListener('change', (e) => {
   if (panel === 'cursor') showHover(state.cursor, null); else renderSummary();
 });
 
+el('crop').addEventListener('click', () => applyCropToCurrentView());
+el('restoreCrop').addEventListener('click', () => restoreOriginalData());
 el('resetCrop').addEventListener('click', () => {
   stack.setCrop(0, state.data.times.length - 1);
   stack.resetView();
 });
+el('exportGpx').addEventListener('click', () => exportGpx());
 el('save').addEventListener('click', () => saveCropped());
 
 document.querySelectorAll('[data-set]').forEach((button) => {
