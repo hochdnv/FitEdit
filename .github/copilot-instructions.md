@@ -1,3 +1,19 @@
+# FIT Editor coding instructions
+
+## License header requirement
+
+When creating a new source file in this repository, always include the standard LGPL header for the project.
+
+Use the author name: K. Hochkirch
+
+Apply this to new files under these paths:
+- `fitedit/**/*.py`
+- `web/**/*.js`
+- `web/**/*.html`
+
+Use the same banner text as the project license header:
+
+```python
 # FIT Editor
 # Copyright (C) 2026 K. Hochkirch
 #
@@ -13,5 +29,8 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
+```
 
-"""FIT file viewer/editor."""
+For JavaScript/HTML files, use the equivalent block comment form with the same wording and copyright line.
+
+Do not remove existing license headers from files that already contain them. When adding a header to a new file, place it at the top before any code or module docstring.

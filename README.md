@@ -156,5 +156,4 @@ file is never modified; the result is always written to a new file.
 
 ## License
 
-Public domain ([Unlicense](LICENSE)) — free for whatever purpose, no conditions
-and no warranty.
+This project is licensed under the [GNU Lesser General Public License v3.0](LICENSE) or any later version.
