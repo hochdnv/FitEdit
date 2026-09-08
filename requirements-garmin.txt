@@ -1,0 +1,4 @@
+# Optional: enables the "Garmin..." panel for downloading activities.
+# The rest of FIT Editor runs on the standard library alone.
+garminconnect>=0.2.25
+curl_cffi

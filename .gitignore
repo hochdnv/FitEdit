@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+
+# Activity data (personal, includes GPS positions)
+*.fit
+*.FIT
+*.markers.json
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

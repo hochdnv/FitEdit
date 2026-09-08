@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FIT Editor</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="toolbar">
+  <strong class="brand">FIT Editor</strong>
+  <select id="fileSelect" title="FIT files in the working directory"></select>
+  <button id="reload" title="Rescan the working directory">&#x21bb;</button>
+  <label class="file-btn">Open&hellip;<input type="file" id="fileInput" accept=".fit,.FIT" hidden></label>
+  <button id="garmin" title="Download activities from Garmin Connect">Garmin&hellip;</button>
+  <span class="spacer"></span>
+  <select id="basemap" title="Map background">
+    <option value="street">Street map</option>
+    <option value="satellite">Satellite</option>
+    <option value="topo">Topographic</option>
+  </select>
+  <select id="units" title="Unit system">
+    <option value="metric">km/h &middot; km</option>
+    <option value="nautical">kn &middot; nm</option>
+  </select>
+  <label class="inline"><input type="checkbox" id="clockMode"> clock time axis</label>
+  <button id="resetCrop">Reset selection</button>
+  <button id="save" class="primary">Save cropped&hellip;</button>
+</header>
+
+<main>
+  <section class="left">
+    <div id="map"></div>
+    <div class="panel" id="markerPanel">
+      <h3>
+        <button class="chev" data-collapse="markerPanel" title="Collapse / expand">&#9662;</button>
+        Markers
+        <select id="markerSymbol" class="mini" title="Symbol used for new markers"></select>
+        <button id="addMarker" class="mini" title="Add a marker at the current cursor position">+ at cursor</button>
+        <button id="placeMode" class="mini" title="Click on the map to place markers">place on map</button>
+        <button id="loadMarkers" class="mini" title="Load markers from a JSON file">load&hellip;</button>
+        <button id="saveMarkersAs" class="mini" title="Save markers to another JSON file">save to&hellip;</button>
+        <span id="markerFile" class="file-note"></span>
+      </h3>
+      <div class="panel-body">
+        <div id="markerList"></div>
+        <input type="file" id="markerFileInput" accept=".json,application/json" hidden>
+      </div>
+    </div>
+    <div class="panel" id="cursorPanel">
+      <h3>
+        <button class="chev" data-collapse="cursorPanel" title="Collapse / expand">&#9662;</button>
+        At cursor
+        <button class="mini" data-fields="cursor">fields</button>
+      </h3>
+      <div class="panel-body" id="cursorBody"></div>
+    </div>
+    <div class="panel" id="summary">
+      <h3>
+        <button class="chev" data-collapse="summary" title="Collapse / expand">&#9662;</button>
+        Activity
+        <button class="mini" data-fields="summary">fields</button>
+      </h3>
+      <div class="panel-body" id="summaryBody"></div>
+    </div>
+  </section>
+
+  <section class="right">
+    <div class="crop-bar">
+      <div class="crop-field">
+        <span class="dot start"></span>
+        <label>Start</label>
+        <input type="text" id="startTime" readonly>
+        <button data-set="start" title="Move start to the cursor position">Set at cursor</button>
+      </div>
+      <div class="crop-field">
+        <span class="dot end"></span>
+        <label>End</label>
+        <input type="text" id="endTime" readonly>
+        <button data-set="end" title="Move end to the cursor position">Set at cursor</button>
+      </div>
+      <div class="crop-field selection" id="selectionInfo"></div>
+    </div>
+
+    <div id="charts" class="charts"></div>
+
+    <div class="cursor-bar">
+      <button id="play" title="Play / pause">&#9654;</button>
+      <input type="range" id="cursor" min="0" max="0" value="0" title="Current position">
+      <span id="cursorTime" class="cursor-time"></span>
+    </div>
+
+    <div class="series-picker">
+      <span class="hint">Plots (wheel = zoom, drag = pan, double click = reset, drag the coloured bars to crop)</span>
+      <div id="seriesList"></div>
+    </div>
+  </section>
+</main>
+
+<div id="tooltip" class="tooltip" hidden></div>
+<div id="toast" class="toast" hidden></div>
+
+<div id="garminModal" class="modal" hidden>
+  <div class="modal-box">
+    <h2>Garmin Connect <button id="garminClose" class="mini">close</button></h2>
+    <p id="garminStatus" class="hint"></p>
+
+    <form id="garminLogin" class="gc-form" hidden>
+      <input type="email" id="gcEmail" placeholder="Garmin account e-mail" autocomplete="username" required>
+      <input type="password" id="gcPassword" placeholder="Password" autocomplete="current-password">
+      <button type="submit" class="primary">Sign in</button>
+      <label class="inline gc-remember"><input type="checkbox" id="gcRemember"> remember on this computer</label>
+      <span id="gcConfigNote" class="hint"></span>
+    </form>
+
+    <form id="garminMfa" class="gc-form" hidden>
+      <input type="text" id="gcMfa" placeholder="Verification code" inputmode="numeric" autocomplete="one-time-code">
+      <button type="submit" class="primary">Submit code</button>
+    </form>
+
+    <div id="garminBrowse" hidden>
+      <div class="gc-bar">
+        <label class="inline">Period
+          <select id="gcDays">
+            <option value="7" selected>last 7 days</option>
+            <option value="14">last 14 days</option>
+            <option value="30">last 30 days</option>
+            <option value="90">last 90 days</option>
+            <option value="365">last year</option>
+          </select>
+        </label>
+        <button id="gcRefresh">Refresh</button>
+        <span class="spacer"></span>
+        <button id="gcLogout" class="mini">sign out</button>
+      </div>
+      <div id="gcList" class="gc-list"></div>
+      <div class="gc-bar">
+        <button id="gcDownload" class="primary">Download selected</button>
+        <span id="gcInfo" class="hint"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>
