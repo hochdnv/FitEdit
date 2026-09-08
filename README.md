@@ -11,7 +11,13 @@ needed for the map background.
 .\run.cmd
 ```
 
-or
+on Linux/macOS:
+
+```bash
+./run.sh
+```
+
+or, on any platform:
 
 ```powershell
 py -3 -m fitedit --dir . --port 8731
